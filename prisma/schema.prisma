@@ -1,0 +1,199 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CUSTOMER
+  COURIER
+  ADMIN
+}
+
+enum ShipmentStatus {
+  CREATED
+  PICKUP_SCHEDULED
+  COURIER_ASSIGNED
+  PICKED_UP
+  IN_TRANSIT
+  AT_DESTINATION_HUB
+  OUT_FOR_DELIVERY
+  DELIVERED
+  FAILED
+  RETURN_TO_SENDER
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+model User {
+  id           String    @id @default(uuid())
+  name         String
+  email        String    @unique
+  password     String?
+  googleId     String?   @unique
+  phone        String?
+  role         Role      @default(CUSTOMER)
+  isBlocked    Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  shipmentsAsCustomer Shipment[]        @relation("CustomerShipments")
+  shipmentsAsCourier  Shipment[]        @relation("CourierShipments")
+  courierProfile      CourierProfile?
+  statusChanges       ShipmentStatusHistory[]
+  auditLogs           AuditLog[]
+  refreshTokens       RefreshToken[]
+
+  @@index([role])
+  @@index([email])
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Zone {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  region    String
+  createdAt DateTime @default(now())
+
+  hubs            Hub[]
+  courierProfiles CourierProfile[]
+}
+
+model Hub {
+  id        String   @id @default(uuid())
+  name      String
+  address   String
+  zoneId    String
+  zone      Zone     @relation(fields: [zoneId], references: [id])
+  createdAt DateTime @default(now())
+
+  originShipments      Shipment[] @relation("OriginHub")
+  destinationShipments Shipment[] @relation("DestinationHub")
+  transfersFrom         HubTransferLog[] @relation("FromHub")
+  transfersTo           HubTransferLog[] @relation("ToHub")
+
+  @@index([zoneId])
+}
+
+model CourierProfile {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vehicleType String
+  zoneId      String
+  zone        Zone     @relation(fields: [zoneId], references: [id])
+  isAvailable Boolean  @default(true)
+  totalEarnings Decimal @default(0) @db.Decimal(10, 2)
+  createdAt   DateTime @default(now())
+
+  @@index([zoneId, isAvailable])
+}
+
+model Shipment {
+  id              String         @id @default(uuid())
+  trackingCode    String         @unique
+  customerId      String
+  customer        User           @relation("CustomerShipments", fields: [customerId], references: [id])
+  courierId       String?
+  courier         User?          @relation("CourierShipments", fields: [courierId], references: [id])
+  originHubId     String
+  originHub       Hub            @relation("OriginHub", fields: [originHubId], references: [id])
+  destinationHubId String
+  destinationHub  Hub            @relation("DestinationHub", fields: [destinationHubId], references: [id])
+
+  recipientName   String
+  recipientPhone  String
+  recipientAddress String
+
+  weightKg        Decimal        @db.Decimal(6, 2)
+  price           Decimal        @db.Decimal(10, 2)
+  status          ShipmentStatus @default(CREATED)
+
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  deletedAt       DateTime?
+
+  statusHistory   ShipmentStatusHistory[]
+  payment         Payment?
+  transferLogs    HubTransferLog[]
+
+  @@index([status])
+  @@index([customerId])
+  @@index([courierId])
+  @@index([trackingCode])
+}
+
+model ShipmentStatusHistory {
+  id          String         @id @default(uuid())
+  shipmentId  String
+  shipment    Shipment       @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  status      ShipmentStatus
+  changedById String
+  changedBy   User           @relation(fields: [changedById], references: [id])
+  note        String?
+  createdAt   DateTime       @default(now())
+
+  @@index([shipmentId])
+}
+
+model HubTransferLog {
+  id            String   @id @default(uuid())
+  shipmentId    String
+  shipment      Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  fromHubId     String
+  fromHub       Hub      @relation("FromHub", fields: [fromHubId], references: [id])
+  toHubId       String
+  toHub         Hub      @relation("ToHub", fields: [toHubId], references: [id])
+  transferredAt DateTime @default(now())
+
+  @@index([shipmentId])
+}
+
+model Payment {
+  id            String        @id @default(uuid())
+  shipmentId    String        @unique
+  shipment      Shipment      @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  amount        Decimal       @db.Decimal(10, 2)
+  provider      String        @default("stripe")
+  status        PaymentStatus @default(PENDING)
+  sessionId     String?
+  transactionId String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([status])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorId    String
+  actor      User     @relation(fields: [actorId], references: [id])
+  action     String
+  targetType String
+  targetId   String
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@index([actorId])
+  @@index([targetType, targetId])
+}
