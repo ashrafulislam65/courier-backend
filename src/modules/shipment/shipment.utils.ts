@@ -8,7 +8,7 @@ export const calculatePrice = (weightKg: number): number => {
 };
 
 export const VALID_TRANSITIONS: Record<ShipmentStatus, ShipmentStatus[]> = {
-  CREATED: ['PICKUP_SCHEDULED', 'CANCELLED'],
+  CREATED: ['PICKUP_SCHEDULED', 'COURIER_ASSIGNED', 'CANCELLED'],
   PICKUP_SCHEDULED: ['COURIER_ASSIGNED', 'CANCELLED'],
   COURIER_ASSIGNED: ['PICKED_UP', 'CANCELLED'],
   PICKED_UP: ['IN_TRANSIT', 'FAILED'],
