@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Google Login Test</title>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+  <h2>Google Sign-In Test</h2>
+  <div id="g_id_onload"
+       data-client_id="834356408685-pv806u7oktu03rif65mas2bmk8vug72l.apps.googleusercontent.com"
+       data-callback="handleCredentialResponse">
+  </div>
+  <div class="g_id_signin" data-type="standard"></div>
+
+  <h3>ID Token (কপি করো):</h3>
+  <textarea id="tokenBox" rows="10" cols="80"></textarea>
+
+  <script>
+    function handleCredentialResponse(response) {
+      document.getElementById("tokenBox").value = response.credential;
+    }
+  </script>
+</body>
+</html>
