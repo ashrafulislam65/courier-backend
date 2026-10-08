@@ -73,7 +73,17 @@ export const listShipments = async (
     : { createdAt: 'desc' as const };
 
   const [items, total] = await Promise.all([
-    prisma.shipment.findMany({ where, skip, take: limit, orderBy }),
+    prisma.shipment.findMany({
+      where,
+      skip,
+      take: limit,
+      orderBy,
+      include: {
+        payment: true,
+        customer: { select: { id: true, name: true, email: true } },
+        courier: { select: { id: true, name: true } },
+      },
+    }),
     prisma.shipment.count({ where }),
   ]);
 
