@@ -203,6 +203,13 @@ export const updateShipmentStatus = async (
     await tx.shipmentStatusHistory.create({
       data: { shipmentId, status: newStatus, changedById: actorId, note },
     });
+        if (newStatus === ShipmentStatus.DELIVERED && updated.courierId) {
+      const commission = Math.round(Number(updated.price) * 0.7);
+      await tx.courierProfile.update({
+        where: { userId: updated.courierId },
+        data: { totalEarnings: { increment: commission } },
+      });
+    }
 
     return updated;
   });
