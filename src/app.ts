@@ -19,7 +19,7 @@ import adminRoutes from './modules/admin/admin.routes';
 const app: Application = express();
 
 app.use(helmet());
-app.use(cors({ origin: env.clientUrl, credentials: true }));
+app.use(cors({ origin: env.clientUrls, credentials: true }));
 app.use(morgan(env.nodeEnv === 'development' ? 'dev' : 'combined'));
 app.use(cookieParser());
 app.use(apiLimiter);

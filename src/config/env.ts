@@ -1,6 +1,10 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
+const clientUrls = (process.env.CLIENT_URL || 'http://localhost:3000')
+  .split(',')
+  .map((url) => url.trim())
+  .filter(Boolean);
 export const env = {
   port: process.env.PORT || 5000,
   nodeEnv: process.env.NODE_ENV || 'development',
@@ -12,5 +16,6 @@ export const env = {
   googleClientId: process.env.GOOGLE_CLIENT_ID as string,
   stripeSecretKey: process.env.STRIPE_SECRET_KEY as string,
   stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET as string,
-  clientUrl: process.env.CLIENT_URL || 'http://localhost:3000',
+    clientUrl: clientUrls[0],
+  clientUrls,
 };
