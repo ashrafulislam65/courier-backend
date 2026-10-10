@@ -15,6 +15,7 @@ import hubRoutes from './modules/hub/hub.routes';
 import courierRoutes from './modules/courier/courier.routes';
 import paymentRoutes, { stripeWebhook } from './modules/payment/payment.routes';
 import adminRoutes from './modules/admin/admin.routes';
+import trackingRoutes from './modules/tracking/tracking.routes';
 
 const app: Application = express();
 
@@ -35,6 +36,7 @@ app.get('/api/v1/health', (req, res) => {
 });
 
 app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/track', trackingRoutes);
 app.use('/api/v1/users', userRoutes);
 app.use('/api/v1/shipments', shipmentRoutes);
 app.use('/api/v1', hubRoutes); // exposes /zones and /hubs

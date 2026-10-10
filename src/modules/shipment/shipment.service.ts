@@ -244,3 +244,20 @@ export const transferHub = async (shipmentId: string, toHubId: string, actorId: 
     return updated;
   });
 };
+export const getPublicTracking = async (code: string) => {
+  const shipment = await prisma.shipment.findFirst({
+    where: { trackingCode: { equals: code.trim(), mode: 'insensitive' }, deletedAt: null },
+    select: {
+      trackingCode: true,
+      status: true,
+      createdAt: true,
+      updatedAt: true,
+      statusHistory: {
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, status: true, note: true, createdAt: true },
+      },
+    },
+  });
+  if (!shipment) throw new AppError('No shipment found with that tracking code', 404);
+  return shipment;
+};
