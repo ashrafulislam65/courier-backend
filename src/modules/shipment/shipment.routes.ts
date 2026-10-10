@@ -18,6 +18,7 @@ import {
   assignCourier,
   updateStatus,
   transferHub,
+  getDeliveryCode,
 } from './shipment.controller';
 
 const router = Router();
@@ -29,6 +30,7 @@ router.get('/', validate(listShipmentsSchema), listShipments);
 router.get('/search', searchShipment);
 router.get('/:id', getShipment);
 router.get('/:id/tracking', getTracking);
+router.get('/:id/delivery-code', authorize('CUSTOMER'), getDeliveryCode);
 router.patch('/:id/cancel', authorize('CUSTOMER'), cancelShipment);
 router.post('/:id/assign-courier', authorize('ADMIN'), validate(assignCourierSchema), assignCourier);
 router.post('/:id/transfer-hub', authorize('ADMIN', 'COURIER'), validate(transferHubSchema), transferHub);

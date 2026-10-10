@@ -56,9 +56,21 @@ export const assignCourier = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const updateStatus = catchAsync(async (req: Request, res: Response) => {
-  const { status, note } = req.body;
-  const shipment = await shipmentService.updateShipmentStatus(req.params.id, status, req.user!.id, note);
+  const { status, note, otp } = req.body;
+  const shipment = await shipmentService.updateShipmentStatus(
+    req.params.id,
+    status,
+    req.user!.id,
+    note,
+    req.user!.role,
+    otp
+  );
   sendSuccess(res, shipment, 'Shipment status updated successfully');
+});
+
+export const getDeliveryCode = catchAsync(async (req: Request, res: Response) => {
+  const result = await shipmentService.getDeliveryCode(req.params.id, req.user!.id);
+  sendSuccess(res, result, 'Delivery code fetched successfully');
 });
 
 export const transferHub = catchAsync(async (req: Request, res: Response) => {

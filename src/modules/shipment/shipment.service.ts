@@ -2,6 +2,49 @@ import { ShipmentStatus } from '@prisma/client';
 import prisma from '../../config/prisma';
 import { AppError } from '../../utils/appError';
 import { calculatePrice, assertValidTransition, generateTrackingCode } from './shipment.utils';
+import { generateDeliveryOtp, isDeliveryOtpValid } from '../../utils/deliveryOtp';
+
+const OTP_MAX_FAILS = 5;
+const OTP_WINDOW_MS = 15 * 60 * 1000;
+
+// ভুল চেষ্টা AuditLog-এ থাকে: ১৫ মিনিটে ৫ বার ভুল হলে ব্লক
+const verifyDeliveryOtp = async (shipmentId: string, courierId: string, otp?: string) => {
+  const since = new Date(Date.now() - OTP_WINDOW_MS);
+  const fails = await prisma.auditLog.count({
+    where: {
+      action: 'DELIVERY_CODE_FAILED',
+      targetType: 'Shipment',
+      targetId: shipmentId,
+      createdAt: { gte: since },
+    },
+  });
+  if (fails >= OTP_MAX_FAILS) {
+    throw new AppError('Too many wrong codes. Please try again in 15 minutes.', 429);
+  }
+  if (!otp) throw new AppError('Delivery code is required to complete a delivery', 400);
+  if (!isDeliveryOtpValid(shipmentId, otp)) {
+    await prisma.auditLog.create({
+      data: {
+        actorId: courierId,
+        action: 'DELIVERY_CODE_FAILED',
+        targetType: 'Shipment',
+        targetId: shipmentId,
+      },
+    });
+    throw new AppError('Incorrect delivery code', 400);
+  }
+};
+
+export const getDeliveryCode = async (shipmentId: string, customerId: string) => {
+  const shipment = await prisma.shipment.findFirst({
+    where: { id: shipmentId, customerId, deletedAt: null },
+  });
+  if (!shipment) throw new AppError('Shipment not found', 404);
+  if (shipment.status !== ShipmentStatus.OUT_FOR_DELIVERY) {
+    throw new AppError('The delivery code is available once your parcel is out for delivery', 400);
+  }
+  return { code: generateDeliveryOtp(shipment.id) };
+};
 
 export const createShipment = async (
   customerId: string,
@@ -187,8 +230,23 @@ export const updateShipmentStatus = async (
   shipmentId: string,
   newStatus: ShipmentStatus,
   actorId: string,
-  note?: string
+  note?: string,
+  actorRole?: string,
+  otp?: string
 ) => {
+  const existing = await prisma.shipment.findUnique({ where: { id: shipmentId } });
+  if (!existing || existing.deletedAt) throw new AppError('Shipment not found', 404);
+
+  if (actorRole === 'COURIER' && existing.courierId !== actorId) {
+    throw new AppError('You can only update shipments assigned to you', 403);
+  }
+
+  assertValidTransition(existing.status, newStatus);
+
+  if (newStatus === ShipmentStatus.DELIVERED && actorRole === 'COURIER') {
+    await verifyDeliveryOtp(shipmentId, actorId, otp);
+  }
+
   return prisma.$transaction(async (tx) => {
     const shipment = await tx.shipment.findUnique({ where: { id: shipmentId } });
     if (!shipment || shipment.deletedAt) throw new AppError('Shipment not found', 404);
@@ -203,18 +261,29 @@ export const updateShipmentStatus = async (
     await tx.shipmentStatusHistory.create({
       data: { shipmentId, status: newStatus, changedById: actorId, note },
     });
-        if (newStatus === ShipmentStatus.DELIVERED && updated.courierId) {
-      const commission = Math.round(Number(updated.price) * 0.7);
-      await tx.courierProfile.update({
-        where: { userId: updated.courierId },
-        data: { totalEarnings: { increment: commission } },
+
+    if (newStatus === ShipmentStatus.DELIVERED) {
+      await tx.auditLog.create({
+        data: {
+          actorId,
+          action: actorRole === 'COURIER' ? 'DELIVERY_CODE_VERIFIED' : 'DELIVERY_CODE_OVERRIDE',
+          targetType: 'Shipment',
+          targetId: shipmentId,
+        },
       });
+
+      if (updated.courierId) {
+        const commission = Math.round(Number(updated.price) * 0.7);
+        await tx.courierProfile.update({
+          where: { userId: updated.courierId },
+          data: { totalEarnings: { increment: commission } },
+        });
+      }
     }
 
     return updated;
   });
 };
-
 export const transferHub = async (shipmentId: string, toHubId: string, actorId: string) => {
   return prisma.$transaction(async (tx) => {
     const shipment = await tx.shipment.findUnique({ where: { id: shipmentId } });
@@ -252,6 +321,8 @@ export const getPublicTracking = async (code: string) => {
       status: true,
       createdAt: true,
       updatedAt: true,
+      originHub: { select: { name: true, address: true } },
+      destinationHub: { select: { name: true, address: true } },
       statusHistory: {
         orderBy: { createdAt: 'asc' },
         select: { id: true, status: true, note: true, createdAt: true },
